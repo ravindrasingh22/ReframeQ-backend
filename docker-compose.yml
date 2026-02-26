@@ -3,6 +3,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY-}
+        HTTPS_PROXY: ${HTTPS_PROXY-}
+        NO_PROXY: ${NO_PROXY-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL-}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL-}
     container_name: reframeq-api
     env_file:
       - .env
@@ -10,7 +16,7 @@ services:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/reframeq
       REDIS_URL: redis://redis:6379/0
     ports:
-      - "8000:8000"
+      - "8001:8000"
     volumes:
       - ./:/app
     depends_on:
@@ -24,6 +30,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY-}
+        HTTPS_PROXY: ${HTTPS_PROXY-}
+        NO_PROXY: ${NO_PROXY-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL-}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL-}
     container_name: reframeq-worker
     env_file:
       - .env
@@ -38,6 +50,30 @@ services:
       redis:
         condition: service_started
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
+
+  seed:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        HTTP_PROXY: ${HTTP_PROXY-}
+        HTTPS_PROXY: ${HTTPS_PROXY-}
+        NO_PROXY: ${NO_PROXY-}
+        PIP_INDEX_URL: ${PIP_INDEX_URL-}
+        PIP_EXTRA_INDEX_URL: ${PIP_EXTRA_INDEX_URL-}
+    container_name: reframeq-seed
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/reframeq
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    command: python -m app.scripts.seed
+    restart: "no"
 
   db:
     image: postgres:16-alpine

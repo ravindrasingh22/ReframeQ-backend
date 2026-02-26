@@ -13,6 +13,8 @@ Permission = Literal[
     'safety.write',
     'analytics.read',
     'audit.read',
+    'settings.read',
+    'settings.write',
     'app.use'
 ]
 
@@ -28,6 +30,8 @@ ROLE_PERMISSIONS: dict[Role, set[Permission]] = {
         'safety.write',
         'analytics.read',
         'audit.read',
+        'settings.read',
+        'settings.write',
         'app.use'
     },
     'content_editor': {

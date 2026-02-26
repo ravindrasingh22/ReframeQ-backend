@@ -64,3 +64,11 @@ Permissions:
 
 Role mapping is defined in `app/core/rbac.py`.
 All protected endpoints use explicit permission dependencies from `app/api/deps.py`.
+
+## Seed Development Data
+- Start dependencies:
+  - `docker compose up -d db redis`
+- Run seed job:
+  - `docker compose run --rm seed`
+- Start API + worker:
+  - `docker compose up api worker`

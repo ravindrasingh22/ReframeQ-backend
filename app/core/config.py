@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     jwt_secret_key: str
     jwt_algorithm: str = 'HS256'
     jwt_access_token_expire_minutes: int = 60
+    ollama_base_url: str = 'http://host.docker.internal:11434'
+    ollama_model: str = 'llama3.1:8b'
+    ollama_timeout_seconds: int = 60
 
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8')
 

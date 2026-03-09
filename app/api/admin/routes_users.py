@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin_permissions
 from app.api.admin.routes_settings import get_supported_languages
 from app.db.session import get_db
-from app.models import AuditLog, User, UserDetail, UserInvite
+from app.models import AuditLog, MoodCheckin, User, UserDetail, UserInvite
 from app.schemas.admin import (
     BulkUserActionRequest,
     ChangePasswordRequest,
@@ -76,6 +76,15 @@ def _get_or_create_user_detail(db: Session, user_id: int) -> UserDetail:
 
 def _user_invite(db: Session, user_id: int) -> UserInvite | None:
     return db.execute(select(UserInvite).where(UserInvite.user_id == user_id)).scalar_one_or_none()
+
+
+def _ensure_invite_code(invite: UserInvite | None, user_id: int) -> str | None:
+    if not invite:
+        return None
+    if invite.invite_code:
+        return invite.invite_code
+    invite.invite_code = f'FAM-{user_id:04d}'
+    return invite.invite_code
 
 
 def _account_state(db: Session, user: User) -> str:
@@ -171,6 +180,9 @@ def create_user(
     )
     db.commit()
     db.refresh(user)
+    invite = _user_invite(db, user.id)
+    _ensure_invite_code(invite, user.id)
+    db.commit()
     return UserListItem(
         id=user.id,
         email=user.email,
@@ -196,6 +208,11 @@ def get_user_profile(
     if detail.language:
         detail.language = _normalize_language(detail.language)
     full_name = _resolved_full_name(db, user, detail)
+    invite = _user_invite(db, user.id)
+    invite_code = _ensure_invite_code(invite, user.id)
+    mood_logs = db.execute(
+        select(MoodCheckin).where(MoodCheckin.user_id == user.id).order_by(MoodCheckin.checkin_date.desc(), MoodCheckin.id.desc()).limit(30)
+    ).scalars().all()
     db.commit()
     return UserProfileResponse(
         user_id=user.id,
@@ -206,6 +223,22 @@ def get_user_profile(
         country=detail.country,
         language=_normalize_language(detail.language),
         member_since=_member_since(user, _user_invite(db, user.id)),
+        invite_code=invite_code,
+        onboarding_step=detail.onboarding_step,
+        onboarding_completed=detail.onboarding_completed,
+        onboarding_updated_at=detail.onboarding_updated_at.isoformat() if detail.onboarding_updated_at else None,
+        onboarding_state=detail.onboarding_state or {},
+        mood_logs=[
+            {
+                'id': item.id,
+                'mood_id': item.mood_id,
+                'mood_label': item.mood_label,
+                'checkin_date': item.checkin_date.isoformat(),
+                'created_at': item.created_at.isoformat(),
+                'updated_at': item.updated_at.isoformat(),
+            }
+            for item in mood_logs
+        ],
     )
 
 
@@ -247,6 +280,7 @@ def update_user_profile(
         )
     )
     db.commit()
+    invite = _user_invite(db, user.id)
     return UserProfileResponse(
         user_id=user.id,
         email=user.email,
@@ -256,6 +290,11 @@ def update_user_profile(
         country=detail.country,
         language=detail.language,
         member_since=_member_since(user, _user_invite(db, user.id)),
+        invite_code=_ensure_invite_code(invite, user.id),
+        onboarding_step=detail.onboarding_step,
+        onboarding_completed=detail.onboarding_completed,
+        onboarding_updated_at=detail.onboarding_updated_at.isoformat() if detail.onboarding_updated_at else None,
+        onboarding_state=detail.onboarding_state or {},
     )
 
 

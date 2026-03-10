@@ -16,6 +16,18 @@ def _apply_lightweight_schema_updates() -> None:
     if 'full_name' not in detail_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE user_details ADD COLUMN full_name VARCHAR(120) NOT NULL DEFAULT ''"))
+    if 'mobile_country_code' not in detail_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user_details ADD COLUMN mobile_country_code VARCHAR(12) NOT NULL DEFAULT ''"))
+    if 'mobile_number' not in detail_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user_details ADD COLUMN mobile_number VARCHAR(24) NOT NULL DEFAULT ''"))
+    if 'city' not in detail_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user_details ADD COLUMN city VARCHAR(120) NOT NULL DEFAULT ''"))
+    if 'state' not in detail_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE user_details ADD COLUMN state VARCHAR(120) NOT NULL DEFAULT ''"))
     if 'onboarding_step' not in detail_columns:
         with engine.begin() as conn:
             conn.execute(text("ALTER TABLE user_details ADD COLUMN onboarding_step VARCHAR(64) NOT NULL DEFAULT 'welcome'"))

@@ -70,6 +70,10 @@ class AppProfileResponse(BaseModel):
     email: str
     role: str
     full_name: str
+    mobile_country_code: str = ''
+    mobile_number: str = ''
+    city: str = ''
+    state: str = ''
     country: str
     language: str
     account_mode: str
@@ -79,6 +83,20 @@ class AppProfileResponse(BaseModel):
     onboarding: OnboardingSummary
     dashboard_title: str
     dashboard_subtitle: str
+
+
+class UpdateAppProfileRequest(BaseModel):
+    full_name: str | None = None
+    mobile_country_code: str | None = None
+    mobile_number: str | None = None
+    city: str | None = None
+    state: str | None = None
+    country: str | None = None
+    language: str | None = None
+
+
+class ChangeAppPasswordRequest(BaseModel):
+    new_password: str
 
 
 class OnboardingToggleItem(BaseModel):

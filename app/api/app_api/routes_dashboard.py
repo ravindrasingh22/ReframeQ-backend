@@ -309,15 +309,13 @@ def _build_stats(
     reminder_pref = str(state.get('reminder_preference') or '')
     fallback_minutes = 10 if reminder_pref == 'daily' else 8 if reminder_pref == 'few_times_week' else 6
     progress_minutes = min(max(len(checkins[-7:]) * 2, 0), fallback_minutes)
-    if progress_minutes == 0:
-        progress_minutes = 8 if _normalize_goal(str(state.get('primary_goal') or '')) == 'friendships' else max(fallback_minutes - 2, 1)
 
     return [
         DashboardStatCard(
             id='streak',
             label='Streak',
             accent='#7c3aed',
-            value=f'{streak or 12} days',
+            value=f'{streak} days',
             hint='Consistency builds momentum.' if streak else 'Start a steady rhythm with one small check-in.',
         ),
         DashboardStatCard(
@@ -326,7 +324,7 @@ def _build_stats(
             accent='#d946ef',
             value=f'{progress_minutes} / {fallback_minutes} min',
             hint='Small sessions count.' if checkins else 'Gentle progress still moves the day forward.',
-            progress_percent=max(10, min(int((progress_minutes / fallback_minutes) * 100), 100)),
+            progress_percent=min(int((progress_minutes / fallback_minutes) * 100), 100) if fallback_minutes else 0,
         ),
     ]
 

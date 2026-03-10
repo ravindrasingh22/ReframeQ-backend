@@ -218,6 +218,10 @@ def get_user_profile(
         user_id=user.id,
         email=user.email,
         full_name=full_name,
+        mobile_country_code=detail.mobile_country_code,
+        mobile_number=detail.mobile_number,
+        city=detail.city,
+        state=detail.state,
         role=user.role,
         is_active=user.is_active,
         country=detail.country,
@@ -257,6 +261,14 @@ def update_user_profile(
 
     if payload.full_name is not None:
         detail.full_name = payload.full_name.strip()
+    if payload.mobile_country_code is not None:
+        detail.mobile_country_code = payload.mobile_country_code.strip()
+    if payload.mobile_number is not None:
+        detail.mobile_number = payload.mobile_number.strip()
+    if payload.city is not None:
+        detail.city = payload.city.strip()
+    if payload.state is not None:
+        detail.state = payload.state.strip()
     if payload.role is not None:
         user.role = payload.role
     if payload.is_active is not None:
@@ -275,7 +287,9 @@ def update_user_profile(
             module='users',
             details=(
                 f'user_id={user_id};role={user.role};is_active={user.is_active};'
-                f'full_name={detail.full_name};country={detail.country};language={detail.language}'
+                f'full_name={detail.full_name};mobile_country_code={detail.mobile_country_code};'
+                f'mobile_number={detail.mobile_number};city={detail.city};state={detail.state};'
+                f'country={detail.country};language={detail.language}'
             ),
         )
     )
@@ -285,6 +299,10 @@ def update_user_profile(
         user_id=user.id,
         email=user.email,
         full_name=_resolved_full_name(db, user, detail),
+        mobile_country_code=detail.mobile_country_code,
+        mobile_number=detail.mobile_number,
+        city=detail.city,
+        state=detail.state,
         role=user.role,
         is_active=user.is_active,
         country=detail.country,

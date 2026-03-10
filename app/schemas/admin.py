@@ -36,6 +36,10 @@ class UserProfileResponse(BaseModel):
     user_id: int
     email: str
     full_name: str
+    mobile_country_code: str = ''
+    mobile_number: str = ''
+    city: str = ''
+    state: str = ''
     role: str
     is_active: bool
     country: str
@@ -60,6 +64,10 @@ class MoodLogItem(BaseModel):
 
 class UpdateUserProfileRequest(BaseModel):
     full_name: str | None = None
+    mobile_country_code: str | None = None
+    mobile_number: str | None = None
+    city: str | None = None
+    state: str | None = None
     role: str | None = None
     is_active: bool | None = None
     country: str | None = None

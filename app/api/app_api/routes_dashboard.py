@@ -2,8 +2,9 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import Select, desc, select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import Select
 
 from app.api.deps import require_app_permissions
 from app.db.session import get_db
@@ -20,6 +21,7 @@ from app.schemas.dashboard import (
     MoodTrendSummary,
     SuggestedToolCard,
 )
+from app.services.mood_reporting import build_trend_summary_data, describe_mood_pattern
 
 router = APIRouter()
 
@@ -193,53 +195,8 @@ def _score_for_mood(mood_id: str) -> int:
     return MOOD_SCORES.get(mood_id, 3)
 
 
-def _average(values: list[int]) -> float:
-    if not values:
-        return 0.0
-    return round(sum(values) / len(values), 2)
-
-
 def _build_trend_summary(checkins: list[MoodCheckin]) -> MoodTrendSummary:
-    scored = [_score_for_mood(item.mood_id) for item in checkins]
-    if len(scored) < 4:
-        latest = checkins[-1].mood_label if checkins else None
-        return MoodTrendSummary(
-            label='Not enough data',
-            direction='neutral',
-            detail='Keep checking in to reveal a clearer pattern.',
-            average_score=_average(scored),
-            latest_mood_label=latest,
-        )
-
-    midpoint = len(scored) // 2
-    first_half = _average(scored[:midpoint])
-    second_half = _average(scored[midpoint:])
-    delta = second_half - first_half
-    latest = checkins[-1].mood_label if checkins else None
-
-    if delta >= 0.45:
-        return MoodTrendSummary(
-            label='Improving',
-            direction='up',
-            detail='Recent check-ins are trending calmer and more positive.',
-            average_score=_average(scored),
-            latest_mood_label=latest,
-        )
-    if delta <= -0.45:
-        return MoodTrendSummary(
-            label='Declining',
-            direction='down',
-            detail='Recent check-ins are trending lower than the earlier part of this range.',
-            average_score=_average(scored),
-            latest_mood_label=latest,
-        )
-    return MoodTrendSummary(
-        label='Stable',
-        direction='steady',
-        detail='Your mood has been relatively consistent in this range.',
-        average_score=_average(scored),
-        latest_mood_label=latest,
-    )
+    return MoodTrendSummary(**build_trend_summary_data(checkins, _score_for_mood))
 
 
 def _build_trend_points(checkins: list[MoodCheckin]) -> list[MoodTrendPoint]:
@@ -262,7 +219,7 @@ def build_mood_report_payload(checkins: list[MoodCheckin], range_days: int) -> d
     return {
         'range_days': range_days,
         'summary': {
-            'average_mood': trend.label if ordered else 'No data',
+            'average_mood': describe_mood_pattern(ordered),
             'average_score': trend.average_score,
             'latest_mood': latest,
             'streak_days': _calculate_streak(ordered, datetime.now(timezone.utc).date()),

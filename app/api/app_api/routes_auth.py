@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models import User, UserDetail
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.services.app_session_service import load_app_session_configuration
 from app.services.auth_service import login
 
 router = APIRouter()
@@ -53,13 +55,23 @@ def app_register(payload: RegisterRequest, db: Annotated[Session, Depends(get_db
     )
     db.commit()
 
-    token, role = login(email, payload.password)
+    session_config = load_app_session_configuration(db)
+    token, role = login(
+        email,
+        payload.password,
+        expires_delta=timedelta(days=session_config['app_session_duration_days']),
+    )
     return TokenResponse(access_token=token, role=role, full_name=full_name)
 
 
 @router.post('/login', response_model=TokenResponse)
 def app_login(payload: LoginRequest, db: Annotated[Session, Depends(get_db)]) -> TokenResponse:
-    token, role = login(payload.email, payload.password)
+    session_config = load_app_session_configuration(db)
+    token, role = login(
+        payload.email,
+        payload.password,
+        expires_delta=timedelta(days=session_config['app_session_duration_days']),
+    )
     if role != 'app_user':
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='App credentials required')
 

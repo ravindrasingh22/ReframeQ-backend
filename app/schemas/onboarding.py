@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 
@@ -83,6 +85,7 @@ class AppProfileResponse(BaseModel):
     onboarding: OnboardingSummary
     dashboard_title: str
     dashboard_subtitle: str
+    emergency_support: 'AppEmergencySupportProfile'
 
 
 class UpdateAppProfileRequest(BaseModel):
@@ -93,6 +96,7 @@ class UpdateAppProfileRequest(BaseModel):
     state: str | None = None
     country: str | None = None
     language: str | None = None
+    emergency_support: 'UpdateAppEmergencySupportRequest | None' = None
 
 
 class ChangeAppPasswordRequest(BaseModel):
@@ -126,3 +130,57 @@ class OnboardingPolicySummary(BaseModel):
 class OnboardingConfigurationResponse(BaseModel):
     policy: OnboardingPolicySummary
     text: list[OnboardingScreenTextItem] = Field(default_factory=list)
+
+
+class TrustedContactItem(BaseModel):
+    id: str
+    name: str
+    relationship: str = ''
+    phone_number: str = ''
+    email: str = ''
+    preferred_language: str = 'en'
+    city: str = ''
+    state: str = ''
+    is_primary: bool = False
+    show_call_shortcut: bool = True
+    support_note: str = ''
+    active: bool = True
+
+
+class UpdateTrustedContactItem(BaseModel):
+    id: str | None = None
+    name: str
+    relationship: str = ''
+    phone_number: str = ''
+    email: str = ''
+    preferred_language: str = 'en'
+    city: str = ''
+    state: str = ''
+    is_primary: bool = False
+    show_call_shortcut: bool = True
+    support_note: str = ''
+    active: bool = True
+
+
+class AppEmergencySupportResourceSummary(BaseModel):
+    country: str = ''
+    helpline_label: str = ''
+    helpline_numbers: list[str] = Field(default_factory=list)
+    emergency_label: str = ''
+    emergency_number: str = ''
+    support_search_url: str = ''
+
+
+class AppEmergencySupportProfile(BaseModel):
+    enabled: bool = False
+    eligible: bool = False
+    profile_complete: bool = False
+    show_profile_prompt: bool = False
+    title: str = 'Emergency Support Path'
+    description: str = ''
+    trusted_contacts: list[TrustedContactItem] = Field(default_factory=list)
+    resource: AppEmergencySupportResourceSummary = Field(default_factory=AppEmergencySupportResourceSummary)
+
+
+class UpdateAppEmergencySupportRequest(BaseModel):
+    trusted_contacts: list[UpdateTrustedContactItem] = Field(default_factory=list)

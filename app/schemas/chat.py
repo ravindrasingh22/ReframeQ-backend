@@ -1,4 +1,25 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+class SafetyDecisionResponse(BaseModel):
+    risk_score: str = 'low'
+    safety_level: str = 'support'
+    trigger_codes: list[str] = Field(default_factory=list)
+    recommended_action: str = 'continue'
+    requires_interrupt: bool = False
+    feature_applied: bool = False
+
+
+class SafetySupportAction(BaseModel):
+    kind: str
+    label: str
+    value: str = ''
+
+
+class SafetySupportCard(BaseModel):
+    title: str = ''
+    body: str = ''
+    actions: list[SafetySupportAction] = Field(default_factory=list)
 
 
 class ChatMessageRequest(BaseModel):
@@ -12,6 +33,8 @@ class ChatMessageResponse(BaseModel):
     model: str
     thread_id: int
     thread_title: str
+    safety_decision: SafetyDecisionResponse = Field(default_factory=SafetyDecisionResponse)
+    support_card: SafetySupportCard | None = None
 
 
 class ChatMessageItem(BaseModel):

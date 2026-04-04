@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from app.core.rbac import ADMIN_ROLES, Role
 from app.core.security import create_access_token
 
@@ -16,9 +18,9 @@ def resolve_role_from_email(email: str) -> Role:
     return 'app_user'
 
 
-def login(email: str, password: str) -> tuple[str, str]:
+def login(email: str, password: str, expires_delta: timedelta | None = None) -> tuple[str, str]:
     role = resolve_role_from_email(email)
-    token = create_access_token(subject=email, role=role)
+    token = create_access_token(subject=email, role=role, expires_delta=expires_delta)
     return token, role
 
 

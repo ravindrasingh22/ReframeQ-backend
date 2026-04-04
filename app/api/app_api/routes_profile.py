@@ -9,7 +9,20 @@ from app.api.admin.routes_settings import get_supported_languages
 from app.api.deps import require_app_permissions
 from app.db.session import get_db
 from app.models import AuditLog, User, UserDetail
-from app.schemas.onboarding import AppProfileResponse, ChangeAppPasswordRequest, UpdateAppProfileRequest
+from app.schemas.onboarding import (
+    AppEmergencySupportProfile,
+    AppEmergencySupportResourceSummary,
+    AppProfileResponse,
+    ChangeAppPasswordRequest,
+    TrustedContactItem,
+    UpdateAppProfileRequest,
+)
+from app.services.emergency_support_service import (
+    load_emergency_support_configuration,
+    load_emergency_support_state,
+    save_emergency_support_state,
+    select_emergency_resource,
+)
 
 router = APIRouter()
 pwd_context = CryptContext(schemes=['pbkdf2_sha256'], deprecated='auto')
@@ -85,7 +98,37 @@ def _get_or_create_user_detail(db: Session, user_id: int) -> UserDetail:
     return detail
 
 
-def _build_profile_response(user: User, detail: UserDetail | None) -> AppProfileResponse:
+def _build_emergency_support_profile(
+    db: Session,
+    detail: UserDetail | None,
+    state: dict,
+) -> AppEmergencySupportProfile:
+    config = load_emergency_support_configuration(db)
+    enabled = bool(config.get('enabled', True))
+    user_type = str(state.get('user_type', '') or '').strip().lower()
+    eligible = user_type in {'adult', 'guardian'} or (not user_type and True)
+    support_state = load_emergency_support_state(detail)
+    contacts = [
+        TrustedContactItem(**item)
+        for item in support_state.get('trusted_contacts', [])
+        if isinstance(item, dict)
+    ]
+    resource = select_emergency_resource(config, detail.country if detail else '')
+    profile_complete = bool(enabled and eligible and contacts)
+    copy = config.get('copy', {})
+    return AppEmergencySupportProfile(
+        enabled=enabled,
+        eligible=eligible,
+        profile_complete=profile_complete,
+        show_profile_prompt=bool(enabled and eligible and not profile_complete),
+        title=str(copy.get('profile_title', 'Emergency Support Path')),
+        description=str(copy.get('profile_description', '')),
+        trusted_contacts=contacts,
+        resource=AppEmergencySupportResourceSummary(**resource) if resource else AppEmergencySupportResourceSummary(),
+    )
+
+
+def _build_profile_response(db: Session, user: User, detail: UserDetail | None) -> AppProfileResponse:
     state = detail.onboarding_state if detail and isinstance(detail.onboarding_state, dict) else {}
     full_name = detail.full_name if detail and detail.full_name else ''
     primary_goal = str(state.get('primary_goal') or '')
@@ -113,6 +156,7 @@ def _build_profile_response(user: User, detail: UserDetail | None) -> AppProfile
             'updated_at': detail.onboarding_updated_at.isoformat() if detail and detail.onboarding_updated_at else None,
             'state': state,
         },
+        emergency_support=_build_emergency_support_profile(db, detail, state),
     )
 
 
@@ -141,10 +185,25 @@ def get_my_profile(
             dashboard_title='Welcome back',
             dashboard_subtitle='Pick up where you left off with your saved onboarding support.',
             onboarding={'step': 'welcome', 'completed': False, 'updated_at': None, 'state': {}},
+            emergency_support=AppEmergencySupportProfile(),
         )
 
     detail = db.execute(select(UserDetail).where(UserDetail.user_id == user.id)).scalar_one_or_none()
-    return _build_profile_response(user, detail)
+    return _build_profile_response(db, user, detail)
+
+
+@router.get('/support-config', response_model=AppEmergencySupportProfile)
+def get_support_config(
+    current_user: Annotated[dict, Depends(require_app_permissions('app.use'))],
+    db: Annotated[Session, Depends(get_db)],
+) -> AppEmergencySupportProfile:
+    email = current_user.get('sub', '')
+    user = db.execute(select(User).where(User.email == email)).scalar_one_or_none()
+    if not user:
+        return AppEmergencySupportProfile()
+    detail = db.execute(select(UserDetail).where(UserDetail.user_id == user.id)).scalar_one_or_none()
+    state = detail.onboarding_state if detail and isinstance(detail.onboarding_state, dict) else {}
+    return _build_emergency_support_profile(db, detail, state)
 
 
 @router.patch('/me', response_model=AppProfileResponse)
@@ -173,6 +232,13 @@ def update_my_profile(
         detail.country = payload.country.strip()
     if payload.language is not None:
         detail.language = _coerce_supported_language(payload.language, get_supported_languages(db))
+    if payload.emergency_support is not None:
+        support_state = save_emergency_support_state(
+            detail,
+            [item.model_dump() for item in payload.emergency_support.trusted_contacts],
+        )
+    else:
+        support_state = load_emergency_support_state(detail)
 
     db.add(
         AuditLog(
@@ -182,14 +248,14 @@ def update_my_profile(
             details=(
                 f'user_id={user.id};full_name={detail.full_name};mobile_country_code={detail.mobile_country_code};'
                 f'mobile_number={detail.mobile_number};city={detail.city};state={detail.state};'
-                f'country={detail.country};language={detail.language}'
+                f'country={detail.country};language={detail.language};trusted_contacts={len(support_state.get("trusted_contacts", []))}'
             ),
         )
     )
     db.commit()
     db.refresh(user)
     db.refresh(detail)
-    return _build_profile_response(user, detail)
+    return _build_profile_response(db, user, detail)
 
 
 @router.post('/me/password')

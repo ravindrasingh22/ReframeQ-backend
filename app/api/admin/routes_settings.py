@@ -10,20 +10,33 @@ from app.db.session import get_db
 from app.models import AuditLog, PlatformSetting
 from app.schemas.settings import (
     AccountModeToggle,
+    AppSessionConfigurationResponse,
     LanguageOption,
     ModelConfigurationResponse,
+    EmergencySupportConfigurationResponse,
     OnboardingPolicyConfigurationResponse,
     OnboardingTextConfigurationResponse,
     OnboardingTextScreenConfig,
     PromptTemplateItem,
     PromptTemplatesResponse,
     SupportedLanguagesResponse,
+    UpdateAppSessionConfigurationRequest,
     UpdateModelConfigurationRequest,
+    UpdateEmergencySupportConfigurationRequest,
     UpdateOnboardingPolicyConfigurationRequest,
     UpdateOnboardingTextConfigurationRequest,
     UpdatePromptTemplatesRequest,
     UpdateSupportedLanguagesRequest,
     UserTypeToggle,
+)
+from app.services.app_session_service import (
+    APP_SESSION_CONFIGURATION_KEY,
+    load_app_session_configuration,
+)
+from app.services.emergency_support_service import (
+    DEFAULT_EMERGENCY_SUPPORT_CONFIGURATION,
+    load_emergency_support_configuration,
+    save_emergency_support_configuration,
 )
 
 router = APIRouter()
@@ -115,6 +128,7 @@ DEFAULT_ONBOARDING_POLICY_CONFIGURATION = {
     'allow_family_flows': True,
     'require_invite_for_family_join': True,
 }
+EMERGENCY_SUPPORT_CONFIGURATION_KEY = 'admin.emergency_support_configuration'
 
 
 def _normalize_iso_code(value: str) -> str:
@@ -210,6 +224,12 @@ def _save_json_setting(db: Session, key: str, value: dict) -> dict:
         setting.value_json = json.dumps(value)
     db.commit()
     return value
+
+
+def _serialize_emergency_support_configuration(data: dict) -> EmergencySupportConfigurationResponse:
+    merged: dict = DEFAULT_EMERGENCY_SUPPORT_CONFIGURATION.copy()
+    merged.update(data)
+    return EmergencySupportConfigurationResponse(**merged)
 
 
 @router.get('/languages', response_model=SupportedLanguagesResponse)
@@ -328,6 +348,34 @@ def update_model_configuration(
     return ModelConfigurationResponse(**saved)
 
 
+@router.get('/app-session', response_model=AppSessionConfigurationResponse)
+def get_app_session_configuration(
+    current_user: Annotated[dict, Depends(require_admin_permissions('settings.read'))],
+    db: Annotated[Session, Depends(get_db)],
+) -> AppSessionConfigurationResponse:
+    _ = current_user
+    return AppSessionConfigurationResponse(**load_app_session_configuration(db))
+
+
+@router.put('/app-session', response_model=AppSessionConfigurationResponse)
+def update_app_session_configuration(
+    payload: UpdateAppSessionConfigurationRequest,
+    current_user: Annotated[dict, Depends(require_admin_permissions('settings.write'))],
+    db: Annotated[Session, Depends(get_db)],
+) -> AppSessionConfigurationResponse:
+    saved = _save_json_setting(db, APP_SESSION_CONFIGURATION_KEY, payload.model_dump())
+    db.add(
+        AuditLog(
+            actor_email=current_user.get('sub', ''),
+            action='app_session_configuration_updated',
+            module='settings',
+            details=f"app_session_duration_days={payload.app_session_duration_days}",
+        )
+    )
+    db.commit()
+    return AppSessionConfigurationResponse(**saved)
+
+
 @router.get('/onboarding-text', response_model=OnboardingTextConfigurationResponse)
 def get_onboarding_text_configuration(
     current_user: Annotated[dict, Depends(require_admin_permissions('settings.read'))],
@@ -385,3 +433,35 @@ def update_onboarding_policy_configuration(
         allow_family_flows=bool(saved.get('allow_family_flows', True)),
         require_invite_for_family_join=bool(saved.get('require_invite_for_family_join', True)),
     )
+
+
+@router.get('/emergency-support', response_model=EmergencySupportConfigurationResponse)
+def get_emergency_support_configuration(
+    current_user: Annotated[dict, Depends(require_admin_permissions('settings.read'))],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmergencySupportConfigurationResponse:
+    _ = current_user
+    return _serialize_emergency_support_configuration(load_emergency_support_configuration(db))
+
+
+@router.put('/emergency-support', response_model=EmergencySupportConfigurationResponse)
+def update_emergency_support_configuration(
+    payload: UpdateEmergencySupportConfigurationRequest,
+    current_user: Annotated[dict, Depends(require_admin_permissions('settings.write'))],
+    db: Annotated[Session, Depends(get_db)],
+) -> EmergencySupportConfigurationResponse:
+    existing = load_emergency_support_configuration(db)
+    saved = save_emergency_support_configuration(db, payload.model_dump())
+    db.add(
+        AuditLog(
+            actor_email=current_user.get('sub', ''),
+            action='emergency_support_configuration_updated',
+            module='settings',
+            details=(
+                f"enabled:{existing.get('enabled', True)}->{payload.enabled};"
+                f"resources={len(payload.resources)};max_contacts={payload.trusted_contact_rules.max_contacts}"
+            ),
+        )
+    )
+    db.commit()
+    return _serialize_emergency_support_configuration(saved)
